@@ -33,7 +33,7 @@ ESP-GRABER — универсальный инструмент для работ
 | Провода-перемычки | [AliExpress](https://aliexpress.ru/item/1005007553381854.html) |
 
 ### 🔌 Схема подключения
-![Схема](https://github.com/user-attachments/assets/26730497-8100-4cc1-8361-187221489662)
+![Схема](https://github.com/user-attachments/assets/cda54f27-3c40-4c8f-980a-df7c30e4257f)
 |Module|Pin 1|Pin 2|Pin 3|Pin 4|Pin 5|Pin 6| Pin 7|
 |--------|--------|--------|--------|--------|--------|--------|--------|
 |**📺 Display**|VCC → 3V3|GND → GND|SCL → G22|SDA → G21|-|-|-|
@@ -41,7 +41,7 @@ ESP-GRABER — универсальный инструмент для работ
 |**📡 CC1101**|1 → GND|2 → 3V3|3 → G2|4 → G5|5 → G18|6 → G23 |7 → G19|
 
 ### 📸 Финальный результат (YouTube)
-<a href="https://www.youtube.com/shorts/J5_6fDBXQZo" target="_blank">
+<a href="https://www.youtube.com/watch?v=15N1QRr-y40" target="_blank">
   <img src="https://img.youtube.com/vi/J5_6fDBXQZo/maxresdefault.jpg" alt="Video" width="500">
 </a>
 
@@ -76,7 +76,7 @@ When using the firmware, you must take into account the laws of your regio. The 
 | Jumper Wires | [AliExpress](https://aliexpress.ru/item/1005007553381854.html) |
 
 ### 🔌 Connection Scheme
-![Scheme](https://github.com/user-attachments/assets/26730497-8100-4cc1-8361-187221489662)
+![Scheme](https://github.com/user-attachments/assets/cda54f27-3c40-4c8f-980a-df7c30e4257f)
 |Module|Pin 1|Pin 2|Pin 3|Pin 4|Pin 5|Pin 6| Pin 7|
 |--------|--------|--------|--------|--------|--------|--------|--------|
 |**📺 Display**|VCC → 3V3|GND → GND|SCL → G22|SDA → G21|-|-|-|
@@ -84,7 +84,7 @@ When using the firmware, you must take into account the laws of your regio. The 
 |**📡 CC1101**|1 → GND|2 → 3V3|3 → G2|4 → G5|5 → G18|6 → G23 |7 → G19|
 
 ### 📸 Final Result (YouTube)
-<a href="https://www.youtube.com/shorts/J5_6fDBXQZo" target="_blank">
+<a href="https://www.youtube.com/watch?v=15N1QRr-y40" target="_blank">
   <img src="https://img.youtube.com/vi/J5_6fDBXQZo/maxresdefault.jpg" alt="Video" width="500">
 </a>
 
