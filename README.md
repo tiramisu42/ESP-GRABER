@@ -34,11 +34,11 @@ ESP-GRABER — универсальный инструмент для работ
 
 ### 🔌 Схема подключения
 ![Схема](https://github.com/user-attachments/assets/26730497-8100-4cc1-8361-187221489662)
-| Модуль       | Контакты              |
-|--------------|-----------------------|
-| **📺 Дисплей** | VCC → 3V3, GND → GND, SCL → G22, SDA → G21 |
-| **🔘 Кнопки**  | K1 → G27, K2 → G26, K3 → G33, K4 → G32 |
-| **📡 CC1101**  | 1 → GND, 2 → 3V3, 3 → G2, 4 → G5, 5 → G18, 6 → G23, 7 → G19 |
+|Module|Pin 1|Pin 2|Pin 3|Pin 4|Pin 5|Pin 6| Pin 7|
+|--------|--------|--------|--------|--------|--------|--------|--------|
+|**📺 Display**|VCC → 3V3|GND → GND|SCL → G22|SDA → G21|-|-|-|
+|**🔘 Buttons**|K1 → G27|K2 → G26|K3 → G33|K4 → G32|-|-|-|
+|**📡 CC1101**|1 → GND|2 → 3V3|3 → G2|4 → G5|5 → G18|6 → G23 |7 → G19|
 
 ### 📸 Финальный результат
 ![ESP-GRABER Device](https://github.com/user-attachments/assets/e881e9e7-5e73-4fd2-a1cd-2f0002cca44b)
@@ -75,11 +75,11 @@ When using the firmware, you must take into account the laws of your regio. The 
 
 ### 🔌 Connection Scheme
 ![Scheme](https://github.com/user-attachments/assets/26730497-8100-4cc1-8361-187221489662)
-| Module       | Pins                 |
-|--------------|----------------------|
-| **📺 Display** | VCC → 3V3, GND → GND, SCL → G22, SDA → G21 |
-| **🔘 Buttons** | K1 → G27, K2 → G26, K3 → G33, K4 → G32 |
-| **📡 CC1101**  | 1 → GND, 2 → 3V3, 3 → G2, 4 → G5, 5 → G18, 6 → G23, 7 → G19 |
+|Module|Pin 1|Pin 2|Pin 3|Pin 4|Pin 5|Pin 6| Pin 7|
+|--------|--------|--------|--------|--------|--------|--------|--------|
+|**📺 Display**|VCC → 3V3|GND → GND|SCL → G22|SDA → G21|-|-|-|
+|**🔘 Buttons**|K1 → G27|K2 → G26|K3 → G33|K4 → G32|-|-|-|
+|**📡 CC1101**|1 → GND|2 → 3V3|3 → G2|4 → G5|5 → G18|6 → G23 |7 → G19|
 
 ### 📸 Final Result
 ![ESP-GRABER Device](https://github.com/user-attachments/assets/e881e9e7-5e73-4fd2-a1cd-2f0002cca44b)
