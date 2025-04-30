@@ -43,7 +43,6 @@ volatile byte logLen;
 volatile bool sleepOn = false;
 
 enum emKeys { kUnknown, kP12bt, k12bt, k24bt, k64bt, kKeeLoq, kANmotors64, kPrinceton };
-enum emSnifferMode { smdNormal, smdAutoRec } snifferMode;
 enum emMenuState { menuLogo, menuMain, menuReceive, menuTransmit } menuState = menuLogo;
 
 struct tpKeyRawData {
@@ -79,10 +78,11 @@ byte EEPROM_key_count;
 byte EEPROM_key_index = 0;
 unsigned long stTimer = 0;
 byte menuIndex = 0;
+bool awaitingDeleteConfirmation = false;
 
 // Function prototypes
 String getTypeName(emKeys tp);
-void OLED_printKey(tpKeyData* kd, byte msgType = 0);
+void OLED_printKey(tpKeyData* kd, byte msgType = 0, bool isSending = false);
 void OLED_printError(String st, bool err = true);
 byte indxKeyInROM(tpKeyData* kd);
 bool EPPROM_AddKey(tpKeyData* kd);
@@ -91,6 +91,7 @@ bool convert2Key(tpKeyData* kd);
 bool convert2KeyRaw(tpKeyRawData* kd);
 void sendSynthKey(tpKeyData* kd);
 void printDebugData();
+void deleteCurrentKey();
 
 void setup() {
   Serial.begin(115200);
@@ -167,30 +168,29 @@ void loop() {
   btn_ok.tick();
   btn_back.tick();
 
-  // Removed direct Serial.read() to prevent spam
+  // Handle serial commands
   if (Serial.available()) {
     char echo = Serial.read();
-    if (echo == 'e' || echo == 't') {
-      if (echo == 'e') {
-        display.clearDisplay();
-        display.setTextSize(1);
-        display.setCursor(0, 0);
-        display.print(F("EEPROM cleared success!"));
-        Serial.println(F("EEPROM cleared"));
-        EEPROM.write(0, 0);
-        EEPROM.write(1, 0);
-        EEPROM.commit();
-        EEPROM_key_count = 0;
-        EEPROM_key_index = 0;
-        display.display();
-        stTimer = millis();
-      } else if (echo == 't' && menuState == menuTransmit) {
-        sendSynthKey(&keyData1);
-        stTimer = millis();
-      }
+    if (echo == 'e') {
+      display.clearDisplay();
+      display.setTextSize(1);
+      display.setCursor(0, 0);
+      display.print(F("EEPROM cleared success!"));
+      Serial.println(F("EEPROM cleared"));
+      EEPROM.write(0, 0);
+      EEPROM.write(1, 0);
+      EEPROM.commit();
+      EEPROM_key_count = 0;
+      EEPROM_key_index = 0;
+      display.display();
+      stTimer = millis();
+    } else if (echo == 't' && menuState == menuTransmit) {
+      sendSynthKey(&keyData1);
+      stTimer = millis();
     }
   }
 
+  // Menu state handling
   if (menuState == menuLogo) {
     if (btn_up.isClick() || btn_down.isClick() || btn_ok.isClick() || btn_back.isClick()) {
       menuState = menuMain;
@@ -208,7 +208,6 @@ void loop() {
     if (btn_ok.isClick()) {
       menuState = (menuIndex == 0) ? menuReceive : menuTransmit;
       if (menuState == menuReceive) {
-        snifferMode = smdNormal;
         ELECHOUSE_cc1101.SetRx();
         OLED_printKey(&keyData1);
       } else {
@@ -221,6 +220,7 @@ void loop() {
       OLED_printLogo(display);
     }
   } else {
+    // Handle EEPROM clear
     if (btn_up.isHold() && btn_down.isHold()) {
       display.clearDisplay();
       display.setTextSize(1);
@@ -236,95 +236,165 @@ void loop() {
       stTimer = millis();
     }
 
-    bool dcl = btn_ok.isDouble();
-    if (btn_ok.isClick() && !dcl && menuState == menuTransmit) {
-      sendSynthKey(&keyData1);
-      stTimer = millis();
-    }
-
-    if (btn_up.isClick() && (EEPROM_key_count > 0)) {
-      EEPROM_key_index--;
-      if (EEPROM_key_index < 1) EEPROM_key_index = EEPROM_key_count;
-      EEPROM_get_key(EEPROM_key_index, &keyData1);
-      OLED_printKey(&keyData1);
-      stTimer = millis();
-    }
-
-    if (btn_down.isClick() && (EEPROM_key_count > 0)) {
-      EEPROM_key_index++;
-      if (EEPROM_key_index > EEPROM_key_count) EEPROM_key_index = 1;
-      EEPROM_get_key(EEPROM_key_index, &keyData1);
-      OLED_printKey(&keyData1);
-      stTimer = millis();
-    }
-
-    if (btn_back.isClick()) {
-      snifferMode = (snifferMode == smdNormal) ? smdAutoRec : smdNormal;
-      OLED_printKey(&keyData1);
-      stTimer = millis();
-    }
-
-    if (btn_ok.isHolded() && menuState == menuReceive) {
-      if (EPPROM_AddKey(&keyData1)) {
-        OLED_printError(F("The key saved"), false);
-        Serial.println(F("Key saved to EEPROM"));
-        delay(1000);
-      } else {
-        OLED_printError(F("Key not saved"), true);
-        Serial.println(F("Failed to save key to EEPROM"));
+    // Handle deletion confirmation
+    if (awaitingDeleteConfirmation) {
+      if (btn_ok.isClick()) {
+        deleteCurrentKey();
+        awaitingDeleteConfirmation = false;
+        OLED_printKey(&keyData1);
+        stTimer = millis();
+      } else if (btn_back.isClick() || btn_up.isClick() || btn_down.isClick()) {
+        awaitingDeleteConfirmation = false;
+        OLED_printKey(&keyData1);
+        stTimer = millis();
       }
-      OLED_printKey(&keyData1);
-      stTimer = millis();
+      return; // Block other actions until confirmation is resolved
     }
 
-    if (recieved && menuState == menuReceive) {
-      Serial.println(F("Signal received, processing..."));
-      if (convert2Key(&keyData1)) {
-        Serial.println(F("Key converted successfully"));
-        if (indxKeyInROM(&keyData1) == 0) {
-          OLED_printKey(&keyData1, 1);
-        } else {
-          OLED_printKey(&keyData1, 3);
-        }
-        for (byte i = 0; i < keyData1.codeLenth >> 3; i++) {
-          Serial.print(keyData1.keyID[i], HEX);
-          Serial.print(" ");
-        }
-        Serial.println();
-      } else {
-        OLED_printError(F("Key conversion failed"), true);
-        Serial.println(F("Key conversion failed"));
+    // Menu-specific actions
+    if (menuState == menuReceive) {
+      // Navigate keys
+      if (btn_up.isClick() && (EEPROM_key_count > 0)) {
+        EEPROM_key_index--;
+        if (EEPROM_key_index < 1) EEPROM_key_index = EEPROM_key_count;
+        EEPROM_get_key(EEPROM_key_index, &keyData1);
+        OLED_printKey(&keyData1);
+        stTimer = millis();
       }
-      if (snifferMode == smdAutoRec) {
+      if (btn_down.isClick() && (EEPROM_key_count > 0)) {
+        EEPROM_key_index++;
+        if (EEPROM_key_index > EEPROM_key_count) EEPROM_key_index = 1;
+        EEPROM_get_key(EEPROM_key_index, &keyData1);
+        OLED_printKey(&keyData1);
+        stTimer = millis();
+      }
+
+      // Save key
+      if (btn_ok.isHolded()) {
         if (EPPROM_AddKey(&keyData1)) {
           OLED_printError(F("The key saved"), false);
           Serial.println(F("Key saved to EEPROM"));
-          delay(500);
+          delay(1000);
         } else {
           OLED_printError(F("Key not saved"), true);
           Serial.println(F("Failed to save key to EEPROM"));
         }
         OLED_printKey(&keyData1);
+        stTimer = millis();
       }
-      stTimer = millis();
-      recieved = false;
+
+      // Process received signal
+      if (recieved) {
+        Serial.println(F("Signal received, processing..."));
+        if (convert2Key(&keyData1)) {
+          Serial.println(F("Key converted successfully"));
+          if (indxKeyInROM(&keyData1) == 0) {
+            OLED_printKey(&keyData1, 1);
+          } else {
+            OLED_printKey(&keyData1, 3);
+          }
+          for (byte i = 0; i < keyData1.codeLenth >> 3; i++) {
+            Serial.print(keyData1.keyID[i], HEX);
+            Serial.print(" ");
+          }
+          Serial.println();
+        } else {
+          OLED_printError(F("Key conversion failed"), true);
+          Serial.println(F("Key conversion failed"));
+        }
+        stTimer = millis();
+        recieved = false;
+      }
+    } else if (menuState == menuTransmit) {
+      // Navigate keys
+      if (btn_up.isClick() && (EEPROM_key_count > 0)) {
+        EEPROM_key_index--;
+        if (EEPROM_key_index < 1) EEPROM_key_index = EEPROM_key_count;
+        EEPROM_get_key(EEPROM_key_index, &keyData1);
+        OLED_printKey(&keyData1);
+        stTimer = millis();
+      }
+      if (btn_down.isClick() && (EEPROM_key_count > 0)) {
+        EEPROM_key_index++;
+        if (EEPROM_key_index > EEPROM_key_count) EEPROM_key_index = 1;
+        EEPROM_get_key(EEPROM_key_index, &keyData1);
+        OLED_printKey(&keyData1);
+        stTimer = millis();
+      }
+
+      // Send key
+      if (btn_ok.isClick()) {
+        sendSynthKey(&keyData1);
+        stTimer = millis();
+      }
     }
 
-    if (btn_back.isHold()) {
+    // Exit to main menu
+    if (btn_back.isClick()) {
       menuState = menuMain;
       OLED_printMenu(display, menuIndex);
+      stTimer = millis();
+    }
+
+    // Initiate key deletion
+    if (btn_back.isHold() && EEPROM_key_count > 0 && !awaitingDeleteConfirmation) {
+      display.clearDisplay();
+      display.setTextSize(1);
+      display.setCursor(0, 0);
+      display.print(F("Delete key "));
+      display.print(EEPROM_key_index);
+      display.print(F("?"));
+      display.setCursor(0, 12);
+      display.print(F("Press OK to confirm"));
+      display.display();
+      awaitingDeleteConfirmation = true;
       stTimer = millis();
     }
   }
 }
 
-// Rest of the functions remain unchanged
-void OLED_printKey(tpKeyData* kd, byte msgType) {
+// Function to delete the current key
+void deleteCurrentKey() {
+  if (EEPROM_key_count == 0 || EEPROM_key_index == 0) return;
+
+  // Shift keys to overwrite the deleted key
+  for (byte i = EEPROM_key_index; i < EEPROM_key_count; i++) {
+    tpKeyData tempKey;
+    EEPROM_get_key(i + 1, &tempKey);
+    int address = i * sizeof(tpKeyData);
+    for (byte j = 0; j < sizeof(tpKeyData); j++) {
+      EEPROM.write(address + j, ((byte*)&tempKey)[j]);
+    }
+  }
+
+  // Decrease key count and update EEPROM
+  EEPROM_key_count--;
+  EEPROM.write(0, EEPROM_key_count);
+  if (EEPROM_key_index > EEPROM_key_count) {
+    EEPROM_key_index = EEPROM_key_count;
+  }
+  EEPROM.write(1, EEPROM_key_index);
+  EEPROM.commit();
+
+  // Update display
+  if (EEPROM_key_count > 0) {
+    EEPROM_get_key(EEPROM_key_index, &keyData1);
+  } else {
+    memset(&keyData1, 0, sizeof(tpKeyData));
+  }
+  OLED_printError(F("Key deleted"), false);
+  Serial.println(F("Key deleted from EEPROM"));
+  delay(1000);
+}
+
+// OLED display functions
+void OLED_printKey(tpKeyData* kd, byte msgType, bool isSending) {
   String st;
   display.clearDisplay();
   display.setTextSize(1);
-  display.setCursor(120, 24);
-  display.print(snifferMode == smdNormal ? "N" : "A");
+  display.setTextColor(1);
+  display.setTextWrap(false);
+  
   switch (msgType) {
     case 0:
       st = "The key " + String(EEPROM_key_index) + " of " + String(EEPROM_key_count) + " in ROM";
@@ -345,14 +415,19 @@ void OLED_printKey(tpKeyData* kd, byte msgType) {
   st = "Type " + getTypeName(kd->type);
   display.setCursor(0, 24);
   display.print(st);
+  
+  if (isSending) {
+    display.setCursor(15, 53);
+    display.print("Sending...");
+    display.drawBitmap(55, 40, image_satellite_dish_bits, 15, 16, 1);
+  }
+  
   display.display();
 }
 
 void OLED_printError(String st, bool err) {
   display.clearDisplay();
   display.setTextSize(1);
-  display.setCursor(120, 24);
-  display.print(snifferMode == smdNormal ? "N" : "A");
   display.setCursor(0, 0);
   if (err) {
     display.print(F("Error!"));
@@ -614,6 +689,9 @@ void myDelayMcs(unsigned long dl) {
 
 void sendSynthKey(tpKeyData* kd) {
   recieved = true;
+  // Display signal info with "Sending..." message
+  OLED_printKey(kd, 0, true);
+
   ELECHOUSE_cc1101.SetTx();
   randomSeed(millis());
   byte ANmotorsByte = random(256);
@@ -640,6 +718,19 @@ void sendSynthKey(tpKeyData* kd) {
   }
   ELECHOUSE_cc1101.SetRx();
   recieved = false;
+
+  // Display "Successfully!" with connected bitmap
+  display.clearDisplay();
+  display.setTextColor(1);
+  display.setTextWrap(false);
+  display.setCursor(15, 47);
+  display.print("Successfully!");
+  display.drawBitmap(15, 12, image_Connected_bits, 62, 31, 1);
+  display.display();
+  delay(1000); // Show success message for 1 second
+
+  // Restore key display
+  OLED_printKey(kd);
 }
 
 void sendSynthBit(int bt[2]) {
