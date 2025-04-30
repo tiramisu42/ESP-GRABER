@@ -41,7 +41,7 @@ ESP-GRABER — универсальный инструмент для работ
 |**📡 CC1101**|1 → GND|2 → 3V3|3 → G2|4 → G5|5 → G18|6 → G23 |7 → G19|
 
 ### 📸 Финальный результат
-![ESP-GRABER Device](https://github.com/user-attachments/assets/e881e9e7-5e73-4fd2-a1cd-2f0002cca44b)
+![ESP-GRABER Device](https://www.youtube.com/shorts/J5_6fDBXQZo)
 
 </div>
 
@@ -82,6 +82,6 @@ When using the firmware, you must take into account the laws of your regio. The 
 |**📡 CC1101**|1 → GND|2 → 3V3|3 → G2|4 → G5|5 → G18|6 → G23 |7 → G19|
 
 ### 📸 Final Result
-![ESP-GRABER Device](https://github.com/user-attachments/assets/e881e9e7-5e73-4fd2-a1cd-2f0002cca44b)
+![ESP-GRABER Device](https://www.youtube.com/shorts/J5_6fDBXQZo)
 
 </div>
