@@ -42,7 +42,6 @@ ESP-GRABER — универсальный инструмент для работ
 
 ### 📸 Финальный результат (YouTube)
 <a href="https://www.youtube.com/watch?v=15N1QRr-y40" target="_blank">
-  <img src="https://img.youtube.com/vi/J5_6fDBXQZo/maxresdefault.jpg" alt="Video" width="500">
 </a>
 
 </div>
@@ -85,7 +84,6 @@ When using the firmware, you must take into account the laws of your regio. The 
 
 ### 📸 Final Result (YouTube)
 <a href="https://www.youtube.com/watch?v=15N1QRr-y40" target="_blank">
-  <img src="https://img.youtube.com/vi/J5_6fDBXQZo/maxresdefault.jpg" alt="Video" width="500">
 </a>
 
 </div>
