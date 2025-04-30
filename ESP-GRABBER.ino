@@ -3,6 +3,7 @@
 #include <Adafruit_SSD1306.h>
 #include <ELECHOUSE_CC1101_SRC_DRV.h>
 #include <GyverButton.h>
+#include "interface.h"
 
 // Pin definitions for ESP32
 #define OLED_SCL 22
@@ -18,8 +19,6 @@
 #define CC1101_MISO 19
 
 // OLED display configuration
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
 #define OLED_RESET -1
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
@@ -34,14 +33,8 @@ GButton btn_back(BTN_BACK, HIGH_PULL, NORM_OPEN);
 
 // Constants
 #define maxDataLog 160
-#define minPause 1250 // Adjusted for ESP32 (no prescaler)
-#define maxPause 6500 // Adjusted for ESP32 (no prescaler)
-
-// Logo bitmap
-static const unsigned char PROGMEM image_satellite_dish_bits[] = {
-    0x00, 0x00, 0x00, 0x78, 0x30, 0x04, 0x2c, 0x32, 0x63, 0x0a, 0xa8, 0xea,
-    0x92, 0xa2, 0x90, 0xe0, 0x89, 0x10, 0x8a, 0x48, 0x44, 0x08, 0x43, 0x24,
-    0x20, 0xc4, 0x30, 0x3c, 0x0c, 0x10, 0x03, 0xe0};
+#define minPause 1250
+#define maxPause 6500
 
 // Data structures
 volatile bool recieved = false;
@@ -88,11 +81,9 @@ unsigned long stTimer = 0;
 byte menuIndex = 0;
 
 // Function prototypes
-void OLED_printLogo();
 String getTypeName(emKeys tp);
 void OLED_printKey(tpKeyData* kd, byte msgType = 0);
 void OLED_printError(String st, bool err = true);
-void OLED_printMenu();
 byte indxKeyInROM(tpKeyData* kd);
 bool EPPROM_AddKey(tpKeyData* kd);
 void EEPROM_get_key(byte EEPROM_key_index1, tpKeyData* kd);
@@ -103,6 +94,7 @@ void printDebugData();
 
 void setup() {
   Serial.begin(115200);
+  while (!Serial); // Wait for serial port to connect
 
   // Initialize buttons
   btn_up.setDebounce(50);
@@ -125,11 +117,12 @@ void setup() {
   btn_down.setTickMode(AUTO);
 
   // Initialize OLED
+  Wire.begin(OLED_SDA, OLED_SCL);
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
     Serial.println(F("SSD1306 allocation failed"));
     for (;;);
   }
-  OLED_printLogo();
+  OLED_printLogo(display);
 
   // Initialize CC1101
   ELECHOUSE_cc1101.setSpiPin(CC1101_SCK, CC1101_MISO, CC1101_MOSI, CC1101_CS);
@@ -165,7 +158,7 @@ void setup() {
     btn_back.tick();
   }
   menuState = menuMain;
-  OLED_printMenu();
+  OLED_printMenu(display, menuIndex);
 }
 
 void loop() {
@@ -174,22 +167,43 @@ void loop() {
   btn_ok.tick();
   btn_back.tick();
 
-  char echo = Serial.read();
-  if (echo > 0) Serial.println(echo);
+  // Removed direct Serial.read() to prevent spam
+  if (Serial.available()) {
+    char echo = Serial.read();
+    if (echo == 'e' || echo == 't') {
+      if (echo == 'e') {
+        display.clearDisplay();
+        display.setTextSize(1);
+        display.setCursor(0, 0);
+        display.print(F("EEPROM cleared success!"));
+        Serial.println(F("EEPROM cleared"));
+        EEPROM.write(0, 0);
+        EEPROM.write(1, 0);
+        EEPROM.commit();
+        EEPROM_key_count = 0;
+        EEPROM_key_index = 0;
+        display.display();
+        stTimer = millis();
+      } else if (echo == 't' && menuState == menuTransmit) {
+        sendSynthKey(&keyData1);
+        stTimer = millis();
+      }
+    }
+  }
 
   if (menuState == menuLogo) {
     if (btn_up.isClick() || btn_down.isClick() || btn_ok.isClick() || btn_back.isClick()) {
       menuState = menuMain;
-      OLED_printMenu();
+      OLED_printMenu(display, menuIndex);
     }
   } else if (menuState == menuMain) {
     if (btn_up.isClick()) {
       menuIndex = (menuIndex == 0) ? 1 : 0;
-      OLED_printMenu();
+      OLED_printMenu(display, menuIndex);
     }
     if (btn_down.isClick()) {
       menuIndex = (menuIndex == 0) ? 1 : 0;
-      OLED_printMenu();
+      OLED_printMenu(display, menuIndex);
     }
     if (btn_ok.isClick()) {
       menuState = (menuIndex == 0) ? menuReceive : menuTransmit;
@@ -204,10 +218,10 @@ void loop() {
     }
     if (btn_back.isClick()) {
       menuState = menuLogo;
-      OLED_printLogo();
+      OLED_printLogo(display);
     }
   } else {
-    if ((echo == 'e') || (btn_up.isHold() && btn_down.isHold())) {
+    if (btn_up.isHold() && btn_down.isHold()) {
       display.clearDisplay();
       display.setTextSize(1);
       display.setCursor(0, 0);
@@ -223,7 +237,7 @@ void loop() {
     }
 
     bool dcl = btn_ok.isDouble();
-    if ((echo == 't') || (btn_ok.isClick() && !dcl && menuState == menuTransmit)) {
+    if (btn_ok.isClick() && !dcl && menuState == menuTransmit) {
       sendSynthKey(&keyData1);
       stTimer = millis();
     }
@@ -298,45 +312,13 @@ void loop() {
 
     if (btn_back.isHold()) {
       menuState = menuMain;
-      OLED_printMenu();
+      OLED_printMenu(display, menuIndex);
       stTimer = millis();
     }
   }
 }
 
-void OLED_printLogo() {
-  display.clearDisplay();
-  display.setTextColor(1);
-  display.setTextSize(2);
-  display.setTextWrap(false);
-  display.setCursor(13, 24);
-  display.print("ESP-GRA");
-  display.setCursor(61, 40);
-  display.print("BBER");
-  display.setTextSize(1);
-  display.setCursor(12, 48);
-  display.print("v1.0");
-  display.setCursor(7, 7);
-  display.print("by teapot174");
-  display.drawBitmap(93, 13, image_satellite_dish_bits, 15, 16, 1);
-  display.display();
-}
-
-void OLED_printMenu() {
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0, 0);
-  display.print(F("Menu:"));
-  display.setCursor(0, 12);
-  if (menuIndex == 0) display.print(F("> "));
-  display.print(F("SubGHz-R"));
-  display.setCursor(0, 24);
-  if (menuIndex == 1) display.print(F("> "));
-  display.print(F("SubGHz-T"));
-  display.display();
-}
-
+// Rest of the functions remain unchanged
 void OLED_printKey(tpKeyData* kd, byte msgType) {
   String st;
   display.clearDisplay();
@@ -449,7 +431,7 @@ void handleInt() {
   const int duration = curTime - lastTime;
   lastTime = curTime;
 
-  if (((duration < 300) || (duration > 12000)) && (changeCnt == 0)) return; // Adjusted for Princeton sync pulse
+  if (((duration < 300) || (duration > 12000)) && (changeCnt == 0)) return;
   if ((duration > 300) && (duration < 12000) && (changeCnt >= 24)) {
     const int delta = duration - abs(keyRawLog[0]);
     if (abs(delta) < 100) {
@@ -509,24 +491,22 @@ bool convert2Key(tpKeyData* kd) {
   kd->midlePause[1] = 0;
   byte i = 1, k = 0, k0 = 0, k1 = 0, j = 0;
 
-  // Check for Princeton (PT2262/PT2264) characteristics
   bool isPrinceton = false;
-  if (abs(kd->startPause[0]) > 8000 && abs(kd->startPause[0]) < 12000) { // Sync pulse ~10ms
+  if (abs(kd->startPause[0]) > 8000 && abs(kd->startPause[0]) < 12000) {
     isPrinceton = true;
     kd->prePulseLenth = 0;
     kd->firstDataIdx = i;
     kd->codeLenth = (logLen - i) >> 1;
 
-    // Princeton bit decoding
     for (; i < logLen; i += 2) {
       int high = abs(keyRawLog[i]);
       int low = abs(keyRawLog[i + 1]);
-      if (high > 800 && high < 1200 && low > 200 && low < 600) { // 1: long high, short low
+      if (high > 800 && high < 1200 && low > 200 && low < 600) {
         bitSet(kd->keyID[k >> 3], 7 - j);
         one[0] += keyRawLog[i];
         one[1] += keyRawLog[i + 1];
         k1++;
-      } else if (high > 200 && high < 600 && low > 800 && low < 1200) { // 0: short high, long low
+      } else if (high > 200 && high < 600 && low > 800 && low < 1200) {
         bitClear(kd->keyID[k >> 3], 7 - j);
         zero[0] += keyRawLog[i];
         zero[1] += keyRawLog[i + 1];
@@ -541,7 +521,6 @@ bool convert2Key(tpKeyData* kd) {
       if (k >= kd->codeLenth) break;
     }
   } else {
-    // Original decoding logic for other protocols
     unsigned int halfT = (abs(keyRawLog[i]) + abs(keyRawLog[i + 1])) >> 1;
     if (logLen > 131) {
       for (; i < logLen; i++) {
