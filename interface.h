@@ -278,7 +278,7 @@ void OLED_printLogo(Adafruit_SSD1306 &display) {
   display.setCursor(13, 24);
   display.print("ESP-GRA");
   display.setCursor(61, 40);
-  display.print("BBER");
+  display.print(" BER");
   display.setTextSize(1);
   display.setCursor(12, 48);
   display.print("v1.0");
