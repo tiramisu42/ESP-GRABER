@@ -40,7 +40,7 @@ ESP-GRABER — универсальный инструмент для работ
 |**🔘 Buttons**|K1 → G27|K2 → G26|K3 → G33|K4 → G32|-|-|-|
 |**📡 CC1101**|1 → GND|2 → 3V3|3 → G2|4 → G5|5 → G18|6 → G23 |7 → G19|
 
-### 📸 Финальный результат
+### 📸 Финальный результат (YouTube)
 <a href="https://www.youtube.com/shorts/J5_6fDBXQZo" target="_blank">
   <img src="https://img.youtube.com/vi/J5_6fDBXQZo/maxresdefault.jpg" alt="Video" width="500">
 </a>
@@ -83,7 +83,7 @@ When using the firmware, you must take into account the laws of your regio. The 
 |**🔘 Buttons**|K1 → G27|K2 → G26|K3 → G33|K4 → G32|-|-|-|
 |**📡 CC1101**|1 → GND|2 → 3V3|3 → G2|4 → G5|5 → G18|6 → G23 |7 → G19|
 
-### 📸 Final Result
+### 📸 Final Result (YouTube)
 <a href="https://www.youtube.com/shorts/J5_6fDBXQZo" target="_blank">
   <img src="https://img.youtube.com/vi/J5_6fDBXQZo/maxresdefault.jpg" alt="Video" width="500">
 </a>
