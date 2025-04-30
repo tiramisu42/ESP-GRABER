@@ -272,7 +272,13 @@ void loop() {
       // Save key
       if (btn_ok.isHolded()) {
         if (EPPROM_AddKey(&keyData1)) {
-          OLED_printError(F("The key saved"), false);
+          display.clearDisplay();
+          display.drawBitmap(16, 6, image_DolphinSaved_bits, 92, 58, 1);
+          display.setTextColor(1);
+          display.setTextWrap(false);
+          display.setCursor(6, 16);
+          display.print("Saved");
+          display.display();
           Serial.println(F("Key saved to EEPROM"));
           delay(1000);
         } else {
@@ -339,13 +345,12 @@ void loop() {
     // Initiate key deletion
     if (btn_back.isHold() && EEPROM_key_count > 0 && !awaitingDeleteConfirmation) {
       display.clearDisplay();
-      display.setTextSize(1);
-      display.setCursor(0, 0);
-      display.print(F("Delete key "));
-      display.print(EEPROM_key_index);
-      display.print(F("?"));
-      display.setCursor(0, 12);
-      display.print(F("Press OK to confirm"));
+      display.drawBitmap(83, 22, image_WarningDolphinFlip_bits, 45, 42, 1);
+      display.drawBitmap(77, 2, image_file_delete_bin_bits, 13, 16, 1);
+      display.setTextColor(1);
+      display.setTextWrap(false);
+      display.setCursor(7, 7);
+      display.print("Press OK to ");
       display.display();
       awaitingDeleteConfirmation = true;
       stTimer = millis();
@@ -382,7 +387,13 @@ void deleteCurrentKey() {
   } else {
     memset(&keyData1, 0, sizeof(tpKeyData));
   }
-  OLED_printError(F("Key deleted"), false);
+  display.clearDisplay();
+  display.drawBitmap(5, 2, image_DolphinMafia_bits, 119, 62, 1);
+  display.setTextColor(1);
+  display.setTextWrap(false);
+  display.setCursor(84, 15);
+  display.print("Deleted");
+  display.display();
   Serial.println(F("Key deleted from EEPROM"));
   delay(1000);
 }
