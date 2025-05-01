@@ -411,7 +411,7 @@ void OLED_printKey(tpKeyData* kd, byte msgType, bool isSending) {
       st = " Signal " + String(EEPROM_key_index) + "/" + String(EEPROM_key_count) + " in ESP";
       break;
     case 1:
-      st = "Hold the Btn to save";
+      st = "Hold OK to save";
       break;
     case 3:
       st = " Signal " + String(indxKeyInROM(kd)) + " exists in ESP";
