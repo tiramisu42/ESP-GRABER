@@ -47,7 +47,7 @@ ESP-GRABER — универсальный инструмент для работ
 
 ## 🚀 About ESP-GRABER
 ESP-GRABER is a versatile tool for working with radio frequencies based on ESP32.  
-The project allows **reading**, **repeating**, and **saving** signals in the 315/433 MHz ranges.  
+The project allows **reading**, **repeating**, and **saving** signals in the 433 MHz ranges.  
 *The project is stable but may be updated for additional features.*
 
 ### ⚠️ Disclaimer
