@@ -1,7 +1,7 @@
 <div align="left">
   <h1>📡 ESP-GRABER   <a href="#ru">Русский</a> | <a href="#en">English</a></h1>
 
-![ESP-GRABER_LOGO](https://github.com/user-attachments/assets/79845259-5289-4785-bf46-4f89b9422fe2)
+![ESP-GRABER_LOGO](https://github.com/user-attachments/assets/e6f66f1a-1d12-48be-9113-1946ed3a8d8e)
 
 </div>
 
