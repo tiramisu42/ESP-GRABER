@@ -23,6 +23,15 @@ ESP-GRABER — универсальный инструмент для работ
 - 💾 **Хранение сигналов (до 20 ключей)**
 - 🚫 **Удаление сигналов**
 
+### 📡 Поддерживаемые модуляции
+- Princeton
+- RcSwitch
+- Came 
+- Holtec
+- Nice
+- StarLine
+- KeeLoq
+
 ## 🛠️ Сборка
 ### 🔧 Необходимые компоненты
 | Компонент | Ссылка |
@@ -62,6 +71,15 @@ By using the firmware, you must comply with the laws of your region. The firmwar
 - 🔄 **Signal Replay**
 - 💾 **Signal Storage (up to 20 keys)**
 - 🚫 **Signal delete**
+
+### 📡 Supported modulations
+- Princeton
+- RcSwitch
+- Came 
+- Holtec
+- Nice
+- StarLine
+- KeeLoq
 
 ## 🛠️ Building
 ### 🔧 Required Components
