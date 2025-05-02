@@ -20,7 +20,7 @@ ESP-GRABER — универсальный инструмент для работ
 ### 📶 SubGHz (433 МГц)
 - 🎯 **Считывание сигналов**
 - 🔄 **Повтор сигналов**
-- 💾 **Хранение сигналов (до 10 ключей)**
+- 💾 **Хранение сигналов (до 20 ключей)**
 - 🚫 **Удаление сигналов**
 
 ## 🛠️ Сборка
@@ -60,7 +60,7 @@ When using the firmware, you must take into account the laws of your regio. The 
 ### 📶 SubGHz (315/433 MHz)
 - 🎯 **Signal Grabbing**
 - 🔄 **Signal Replay**
-- 💾 **Signal Storage (up to 10 keys)**
+- 💾 **Signal Storage (up to 20 keys)**
 - 🚫 **Signal delete**
 
 ## 🛠️ Building
