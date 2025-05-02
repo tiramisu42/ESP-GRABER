@@ -19,7 +19,7 @@
 #define CC1101_MOSI 23
 #define CC1101_MISO 19
 
-// OLED display configuration
+// OLED
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET -1
@@ -42,6 +42,7 @@ RCSwitch rcswitch = RCSwitch();
 #define MAX_KEY_COUNT 20 // Ключи
 #define RSSI_THRESHOLD -65
 #define MAX_TRIES 5
+#define EEPROM_SIZE 2048 // Место под ключи
 
 volatile bool recieved = false;
 volatile int keyRawLog[MAX_DATA_LOG];
@@ -64,9 +65,9 @@ struct tpKeyData {
   emKeys type;
   float frequency;
   int te;
-  String rawData; // RAW
-  int bitLength; // Decode
-  String preset; // Protocol
+  char rawData[16];
+  int bitLength;
+  char preset[8];
 };
 
 byte maxKeyCount = MAX_KEY_COUNT;
@@ -101,7 +102,7 @@ void restoreReceiveMode();
 void setup() {
   Serial.begin(115200);
 
-  // Снова конпки
+  // Снова кнопки
   btn_up.setDebounce(50);
   btn_up.setTimeout(500);
   btn_up.setClickTimeout(300);
@@ -136,9 +137,9 @@ void setup() {
   rcswitch.enableReceive(CC1101_GDO0);
 
   // Инициализация EEPROM
-  EEPROM.begin(512);
+  EEPROM.begin(EEPROM_SIZE);
   byte read_count = EEPROM.read(0);
-  EEPROM_key_count = (read_count < MAX_KEY_COUNT) ? read_count : 0; // Reset if invalid
+  EEPROM_key_count = (read_count <= MAX_KEY_COUNT) ? read_count : 0;
   EEPROM_key_index = EEPROM.read(1);
   if (EEPROM_key_count > 0 && EEPROM_key_index <= EEPROM_key_count && EEPROM_key_index > 0) {
     EEPROM_get_key(EEPROM_key_index, &keyData1);
@@ -437,15 +438,19 @@ void read_rcswitch(tpKeyData* kd) {
     }
     kd->te = rcswitch.getReceivedDelay();
     kd->bitLength = rcswitch.getReceivedBitlength();
-    kd->preset = String(rcswitch.getReceivedProtocol());
-    kd->rawData = "";
     kd->codeLenth = kd->bitLength;
+    strncpy(kd->preset, String(rcswitch.getReceivedProtocol()).c_str(), sizeof(kd->preset) - 1);
+    kd->preset[sizeof(kd->preset) - 1] = '\0';
+    kd->rawData[0] = '\0';
     unsigned int* raw = rcswitch.getReceivedRawdata();
-    for (int i = 0; i < kd->bitLength * 2; i++) {
-      if (i > 0) kd->rawData += " ";
+    String rawStr = "";
+    for (int i = 0; i < kd->bitLength * 2 && i < 15; i++) {
+      if (i > 0) rawStr += " ";
       int sign = (i % 2 == 0) ? 1 : -1;
-      kd->rawData += String(sign * (int)raw[i]);
+      rawStr += String(sign * (int)raw[i]);
     }
+    strncpy(kd->rawData, rawStr.c_str(), sizeof(kd->rawData) - 1);
+    kd->rawData[sizeof(kd->rawData) - 1] = '\0';
     validKeyReceived = true;
     byte idx = indxKeyInROM(kd);
     OLED_printKey(kd, idx == 0 ? 1 : 3);
@@ -469,11 +474,16 @@ void read_raw(tpKeyData* kd) {
     Serial.println(F("Raw signal captured"));
     signals++;
     kd->frequency = frequency;
-    kd->rawData = data;
+    if (data.length() >= sizeof(kd->rawData)) {
+      data = data.substring(0, sizeof(kd->rawData) - 1);
+    }
+    strncpy(kd->rawData, data.c_str(), sizeof(kd->rawData) - 1);
+    kd->rawData[sizeof(kd->rawData) - 1] = '\0';
     kd->type = kUnknown;
     kd->te = 0;
     kd->bitLength = 0;
-    kd->preset = "0";
+    strncpy(kd->preset, "0", sizeof(kd->preset) - 1);
+    kd->preset[sizeof(kd->preset) - 1] = '\0';
     kd->codeLenth = transitions;
     if (decoded) {
       kd->keyID[0] = decoded & 0xFF;
@@ -486,8 +496,9 @@ void read_raw(tpKeyData* kd) {
       }
       kd->te = rcswitch.getReceivedDelay();
       kd->bitLength = rcswitch.getReceivedBitlength();
-      kd->preset = String(rcswitch.getReceivedProtocol());
       kd->codeLenth = kd->bitLength;
+      strncpy(kd->preset, String(rcswitch.getReceivedProtocol()).c_str(), sizeof(kd->preset) - 1);
+      kd->preset[sizeof(kd->preset) - 1] = '\0';
     } else {
       if (transitions >= 129 && transitions <= 137) {
         kd->type = kStarLine;
@@ -518,7 +529,6 @@ void OLED_printWaitingSignal() {
   display.display();
 }
 
-// Логика удаления ключа
 void deleteCurrentKey() {
   if (EEPROM_key_count == 0) {
     Serial.println(F("No keys to delete"));
@@ -587,7 +597,6 @@ void deleteCurrentKey() {
   display.display();
   delay(1000);
 }
-
 
 void OLED_printKey(tpKeyData* kd, byte msgType, bool isSending) {
   String st;
@@ -676,8 +685,16 @@ byte indxKeyInROM(tpKeyData* kd) {
 }
 
 bool EEPROM_AddKey(tpKeyData* kd) {
-  if (!kd || kd->codeLenth == 0 || kd->frequency == 0.0) {
-    Serial.println(F("Invalid key data: codeLenth or frequency is zero"));
+  if (!kd) {
+    Serial.println(F("Invalid key data: NULL pointer"));
+    return false;
+  }
+  if (kd->codeLenth == 0) {
+    Serial.println(F("Invalid key data: codeLenth is zero"));
+    return false;
+  }
+  if (kd->frequency == 0.0) {
+    Serial.println(F("Invalid key data: frequency is zero"));
     return false;
   }
   byte indx = indxKeyInROM(kd);
@@ -695,7 +712,7 @@ bool EEPROM_AddKey(tpKeyData* kd) {
   EEPROM_key_count++;
   EEPROM_key_index = EEPROM_key_count;
   int address = EEPROM_key_index * sizeof(tpKeyData) + 2;
-  if (address + sizeof(tpKeyData) > EEPROM.length()) {
+  if (address + sizeof(tpKeyData) > EEPROM_SIZE) {
     EEPROM_key_count--;
     Serial.println(F("EEPROM overflow"));
     return false;
@@ -713,7 +730,7 @@ bool EEPROM_AddKey(tpKeyData* kd) {
 
 void EEPROM_get_key(byte EEPROM_key_index1, tpKeyData* kd) {
   int address = EEPROM_key_index1 * sizeof(tpKeyData) + 2;
-  if (address + sizeof(tpKeyData) > EEPROM.length()) {
+  if (address + sizeof(tpKeyData) > EEPROM_SIZE) {
     Serial.println(F("Invalid EEPROM address for key read"));
     return;
   }
@@ -775,7 +792,7 @@ void sendSynthKey(tpKeyData* kd) {
     for (int i = 0; i < kd->bitLength / 8; i++) {
       data |= ((uint64_t)kd->keyID[i] << (i * 8));
     }
-    int protocol = kd->preset.toInt();
+    int protocol = atoi(kd->preset);
     if (kd->type == kCAME || kd->type == kNICE || kd->type == kHOLTEK) {
       protocol = 11;
       kd->te = 270;
@@ -790,7 +807,7 @@ void sendSynthKey(tpKeyData* kd) {
     rcswitch.send(data, kd->bitLength);
     rcswitch.disableTransmit();
   } else {
-    String data = kd->rawData;
+    String data = String(kd->rawData);
     int buff_size = 0;
     int index = 0;
     while (index >= 0) {
