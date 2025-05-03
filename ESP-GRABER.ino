@@ -34,13 +34,22 @@ GButton btn_back(BTN_BACK, HIGH_PULL, NORM_OPEN);
 // CC1101
 #define DEFAULT_RF_FREQUENCY 433.92 // MHz
 float frequency = DEFAULT_RF_FREQUENCY;
+const float frequencies[] = {315.0, 433.92, 868.0, 915.0};
+const int numFrequencies = 4;
+int freqIndex = 1; // Дефолт 433.92 MHz
+
+// Список частот для аналайзера
+const float subghz_frequency_list[] = {315.0, 433.92, 868.0, 915.0};
+const int subghz_frequency_count = sizeof(subghz_frequency_list) / sizeof(subghz_frequency_list[0]);
+int current_scan_index = 0;
+const int rssi_threshold = -85; // Порог RSSI
 
 // RCSwitch
 RCSwitch rcswitch = RCSwitch();
 
 #define MAX_DATA_LOG 512
 #define MAX_KEY_COUNT 20 // Ключи
-#define RSSI_THRESHOLD -65
+#define RSSI_THRESHOLD -85
 #define MAX_TRIES 5
 #define EEPROM_SIZE 2048 // Место под ключи
 
@@ -50,7 +59,7 @@ volatile byte logLen;
 volatile bool sleepOn = false;
 
 enum emKeys { kUnknown, kP12bt, k12bt, k24bt, k64bt, kKeeLoq, kANmotors64, kPrinceton, kRcSwitch, kStarLine, kCAME, kNICE, kHOLTEK };
-enum emMenuState { menuLogo, menuMain, menuReceive, menuTransmit } menuState = menuLogo;
+enum emMenuState { menuLogo, menuMain, menuReceive, menuTransmit, menuAnalyzer, menuJammer } menuState = menuLogo;
 
 struct tpKeyData {
   byte keyID[9];
@@ -74,6 +83,7 @@ byte maxKeyCount = MAX_KEY_COUNT;
 byte EEPROM_key_count;
 byte EEPROM_key_index = 0;
 unsigned long stTimer = 0;
+unsigned long scanTimer = 0;
 byte menuIndex = 0;
 bool awaitingDeleteConfirmation = false;
 bool validKeyReceived = false;
@@ -82,6 +92,10 @@ bool autoSave = false;
 int signals = 0;
 uint64_t lastSavedKey = 0;
 tpKeyData keyData1;
+float detected_frequency = 0.0;
+float last_detected_frequency = 0.0;
+bool display_updated = false;
+bool isJamming = false;
 
 String getTypeName(emKeys tp);
 void OLED_printKey(tpKeyData* kd, byte msgType = 0, bool isSending = false);
@@ -98,6 +112,10 @@ void setupCC1101();
 void read_rcswitch(tpKeyData* kd);
 void read_raw(tpKeyData* kd);
 void restoreReceiveMode();
+void OLED_printAnalyzer(bool signalReceived = false, float detectedFreq = 0.0);
+void OLED_printJammer();
+void startJamming();
+void stopJamming();
 
 void setup() {
   Serial.begin(115200);
@@ -200,16 +218,18 @@ void loop() {
     }
   } else if (menuState == menuMain) {
     if (btn_up.isClick()) {
-      menuIndex = (menuIndex == 0) ? 1 : menuIndex - 1;
+      menuIndex = (menuIndex == 0) ? 3 : menuIndex - 1;
       OLED_printMenu(display, menuIndex);
     }
     if (btn_down.isClick()) {
-      menuIndex = (menuIndex == 1) ? 0 : menuIndex + 1;
+      menuIndex = (menuIndex == 3) ? 0 : menuIndex + 1;
       OLED_printMenu(display, menuIndex);
     }
     if (btn_ok.isClick()) {
       if (menuIndex == 0) menuState = menuReceive;
-      else menuState = menuTransmit;
+      else if (menuIndex == 1) menuState = menuTransmit;
+      else if (menuIndex == 2) menuState = menuAnalyzer;
+      else if (menuIndex == 3) menuState = menuJammer;
       if (menuState == menuReceive) {
         setupCC1101();
         rcswitch.disableReceive();
@@ -227,6 +247,18 @@ void loop() {
           memset(&keyData1, 0, sizeof(tpKeyData));
         }
         OLED_printKey(&keyData1);
+      } else if (menuState == menuAnalyzer) {
+        setupCC1101();
+        rcswitch.disableReceive();
+        current_scan_index = 0;
+        detected_frequency = 0.0;
+        last_detected_frequency = 0.0;
+        display_updated = false;
+        scanTimer = millis();
+        OLED_printAnalyzer();
+      } else if (menuState == menuJammer) {
+        isJamming = false;
+        OLED_printJammer();
       }
       stTimer = millis();
     }
@@ -271,6 +303,10 @@ void loop() {
           OLED_printKey(&keyData1);
         } else if (menuState == menuReceive) {
           OLED_printWaitingSignal();
+        } else if (menuState == menuAnalyzer) {
+          OLED_printAnalyzer(last_detected_frequency != 0.0, last_detected_frequency);
+        } else if (menuState == menuJammer) {
+          OLED_printJammer();
         } else {
           menuState = menuMain;
           OLED_printMenu(display, menuIndex);
@@ -282,16 +318,21 @@ void loop() {
 
     // Сцены
     if (menuState == menuReceive) {
-      if (btn_up.isClick() && (EEPROM_key_count > 0)) {
-        EEPROM_key_index = (EEPROM_key_index == 1) ? EEPROM_key_count : EEPROM_key_index - 1;
-        EEPROM_get_key(EEPROM_key_index, &keyData1);
-        OLED_printKey(&keyData1);
+      // Переключение частоты
+      if (btn_up.isClick()) {
+        freqIndex = (freqIndex + 1) % numFrequencies;
+        frequency = frequencies[freqIndex];
+        keyData1.frequency = frequency;
+        setupCC1101();
+        OLED_printWaitingSignal();
         stTimer = millis();
       }
-      if (btn_down.isClick() && (EEPROM_key_count > 0)) {
-        EEPROM_key_index = (EEPROM_key_index == EEPROM_key_count) ? 1 : EEPROM_key_index + 1;
-        EEPROM_get_key(EEPROM_key_index, &keyData1);
-        OLED_printKey(&keyData1);
+      if (btn_down.isClick()) {
+        freqIndex = (freqIndex - 1 + numFrequencies) % numFrequencies;
+        frequency = frequencies[freqIndex];
+        keyData1.frequency = frequency;
+        setupCC1101();
+        OLED_printWaitingSignal();
         stTimer = millis();
       }
       if (btn_ok.isHolded() && validKeyReceived) {
@@ -350,13 +391,13 @@ void loop() {
       }
     } else if (menuState == menuTransmit) {
       if (btn_up.isClick() && (EEPROM_key_count > 0)) {
-        EEPROM_key_index = (EEPROM_key_index == 1) ? EEPROM_key_count : EEPROM_key_index - 1;
+        EEPROM_key_index = (EEPROM_key_index == EEPROM_key_count) ? 1 : EEPROM_key_index + 1;
         EEPROM_get_key(EEPROM_key_index, &keyData1);
         OLED_printKey(&keyData1);
         stTimer = millis();
       }
       if (btn_down.isClick() && (EEPROM_key_count > 0)) {
-        EEPROM_key_index = (EEPROM_key_index == EEPROM_key_count) ? 1 : EEPROM_key_index + 1;
+        EEPROM_key_index = (EEPROM_key_index == 1) ? EEPROM_key_count : EEPROM_key_index - 1;
         EEPROM_get_key(EEPROM_key_index, &keyData1);
         OLED_printKey(&keyData1);
         stTimer = millis();
@@ -372,15 +413,75 @@ void loop() {
         }
         stTimer = millis();
       }
+    } else if (menuState == menuAnalyzer) {
+      if (millis() - scanTimer >= 250) {
+        int rssi = ELECHOUSE_cc1101.getRssi();
+        if (rssi >= rssi_threshold) {
+          detected_frequency = subghz_frequency_list[current_scan_index];
+          if (detected_frequency != last_detected_frequency) {
+            last_detected_frequency = detected_frequency;
+            Serial.print(F("Signal detected at "));
+            Serial.print(detected_frequency);
+            Serial.println(F(" MHz"));
+            OLED_printAnalyzer(true, last_detected_frequency);
+            display_updated = true;
+          }
+        } else {
+          // Сигнал отсутствует, продолжаем скан
+          detected_frequency = 0.0;
+        }
+        // Следующая частота
+        current_scan_index = (current_scan_index + 1) % subghz_frequency_count;
+        ELECHOUSE_cc1101.setMHZ(subghz_frequency_list[current_scan_index]);
+        ELECHOUSE_cc1101.SetRx();
+        delayMicroseconds(3500); // Стабилизация приемника
+        scanTimer = millis();
+      }
+    } else if (menuState == menuJammer) {
+      if (btn_up.isClick()) {
+        freqIndex = (freqIndex + 1) % numFrequencies;
+        frequency = frequencies[freqIndex];
+        if (isJamming) {
+          stopJamming();
+          startJamming();
+        }
+        OLED_printJammer();
+        stTimer = millis();
+      }
+      if (btn_down.isClick()) {
+        freqIndex = (freqIndex - 1 + numFrequencies) % numFrequencies;
+        frequency = frequencies[freqIndex];
+        if (isJamming) {
+          stopJamming();
+          startJamming();
+        }
+        OLED_printJammer();
+        stTimer = millis();
+      }
+      if (btn_ok.isClick()) {
+        if (!isJamming) {
+          startJamming();
+          isJamming = true;
+        } else {
+          stopJamming();
+          isJamming = false;
+        }
+        OLED_printJammer();
+        stTimer = millis();
+      }
     }
 
     if (btn_back.isClick()) {
+      if (menuState == menuJammer && isJamming) {
+        stopJamming();
+        isJamming = false;
+      }
       menuState = menuMain;
       restoreReceiveMode();
       OLED_printMenu(display, menuIndex);
       stTimer = millis();
     }
-    if (btn_back.isHold() && EEPROM_key_count > 0 && !awaitingDeleteConfirmation) {
+    if (btn_back.isHold() && EEPROM_key_count > 0 && !awaitingDeleteConfirmation && menuState == menuTransmit) {
       display.clearDisplay();
       display.drawBitmap(83, 22, image_WarningDolphinFlip_bits, 45, 42, 1);
       display.drawBitmap(77, 2, image_file_delete_bin_bits, 13, 16, 1);
@@ -410,7 +511,7 @@ void setupCC1101() {
 void restoreReceiveMode() {
   ELECHOUSE_cc1101.Init();
   ELECHOUSE_cc1101.setModulation(2);
-  ELECHOUSE_cc1101.setMHZ(frequency);
+  ELECHOUSE_cc1101.setMHZ(frequency); // Последняя выбранная частота
   ELECHOUSE_cc1101.setRxBW(270.0);
   ELECHOUSE_cc1101.setDeviation(0);
   ELECHOUSE_cc1101.setPA(12);
@@ -519,13 +620,15 @@ void OLED_printWaitingSignal() {
   display.clearDisplay();
   display.drawBitmap(0, 4, image_RFIDDolphinReceive_bits, 97, 61, 1);
   display.drawBitmap(79, 8, image_Layer_4_bits, 23, 17, 0);
-  display.drawBitmap(72, 11, image_External_ant_1_bits, 19, 11, 1);
   display.setTextColor(1);
   display.setTextWrap(false);
   display.setCursor(65, 38);
   display.print("Waiting");
   display.setCursor(65, 47);
   display.print("signal...");
+  // Выбранная частота
+  display.setCursor(72, 13);
+  display.print(String(frequency, 2) + "MHz");
   display.display();
 }
 
@@ -874,4 +977,62 @@ void sendSynthBit(int bt[2]) {
       myDelayMcs(-bt[i]);
     }
   }
+}
+
+void OLED_printAnalyzer(bool signalReceived, float detectedFreq) {
+  display.clearDisplay();
+  display.drawBitmap(0, 7, image_Dolphin_MHz_bits, 108, 57, 1);
+  display.drawBitmap(100, 6, image_MHz_1_bits, 25, 11, 1);
+  display.setTextColor(1);
+  display.setTextWrap(false);
+  display.setCursor(62, 10);
+  if (signalReceived || detectedFreq != 0.0) {
+    char freq_str[7];
+    snprintf(freq_str, sizeof(freq_str), "%06.2f", detectedFreq);
+    display.print(freq_str);
+  } else {
+    display.print("000.00");
+  }
+  display.display();
+}
+
+void OLED_printJammer() {
+  display.clearDisplay();
+  display.drawBitmap(0, 3, image_Dolphin_Send_bits, 97, 61, 1);
+  display.setTextColor(1);
+  display.setTextWrap(false);
+  display.setCursor(78, 12);
+  display.print(String(frequency, 2));
+  display.setCursor(65, 42);
+  if (isJamming) {
+    display.print("Jamming...");
+  } else {
+    display.print("Press OK");
+  }
+  if (!isJamming) {
+    display.setCursor(65, 51);
+    display.print("to start");
+  }
+  display.display();
+}
+
+void startJamming() {
+  Serial.println(F("Starting jammer"));
+  ELECHOUSE_cc1101.Init();
+  ELECHOUSE_cc1101.setModulation(0);
+  ELECHOUSE_cc1101.setMHZ(frequency);
+  ELECHOUSE_cc1101.setPA(12); // Мощность
+  ELECHOUSE_cc1101.setDeviation(0);
+  ELECHOUSE_cc1101.setRxBW(270.0);
+  
+  ELECHOUSE_cc1101.SetTx();
+  ELECHOUSE_cc1101.SpiWriteReg(0x3E, 0xFF);
+  ELECHOUSE_cc1101.SpiWriteReg(0x35, 0x60);
+}
+
+void stopJamming() {
+  Serial.println(F("Stopping jammer"));
+  ELECHOUSE_cc1101.SpiWriteReg(0x35, 0x00);
+  ELECHOUSE_cc1101.SetRx();
+  restoreReceiveMode();
 }
